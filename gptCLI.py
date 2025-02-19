@@ -14,7 +14,9 @@ You are a programming language interpreter that converts YAML instructions into 
 
 Your output must strictly follow this format (do not include any additional text):
 
-Status: (status – a one line explanation of the program explaining how it works and how to use it)
+Status: (status – status of the yaml code given, is it correct, or is there errors? & include if the python code was generated or not)
+Desc: (a one line  explanation of the program explaining how it works simply)
+Next: (state if it requires changes on this same line (ex api specification, url, api key) only if they are required, and if any modules are required to be installed.)
 Code: (complete, syntactically correct Python code)
 """
 
@@ -116,20 +118,20 @@ def run_code_section(stdscr, code_str):
     Saves the provided code (assumed to be Python code) to a temporary file,
     after removing markdown code block markers, executes it, captures its output,
     and displays that output in the current window.
-    Before saving, any line that starts with "Status:" will be commented out.
+    Before saving, any header lines (Status:, Desc:, Next:) are filtered out.
     Press ';' to exit and return to the editor.
     """
     # Remove markdown code fences if present
     code_str = code_str.replace("```python", "").replace("```", "")
     
-    # Comment out any line that starts with "Status:"
-    new_lines = []
+    # Filter out any header lines starting with "Status:", "Desc:", or "Next:"
+    filtered_lines = []
     for line in code_str.splitlines():
-        if line.lstrip().startswith("Status:"):
-            new_lines.append("#" + line)
+        if re.match(r'^\s*(Status:|Desc:|Next:)', line):
+            filtered_lines.append("#" + line)
         else:
-            new_lines.append(line)
-    code_str = "\n".join(new_lines)
+            filtered_lines.append(line)
+    code_str = "\n".join(filtered_lines)
     
     temp_filename = "temp_code.py"
     with open(temp_filename, "w") as f:
@@ -154,8 +156,7 @@ def run_code_section(stdscr, code_str):
 def run_editor(stdscr, api_key):
     """
     Runs the full-screen YAML editor with line numbers, manual cursor drawing,
-    and a command bar. Command mode is entered by pressing ";".
-    Commands:
+    and a command bar. Command mode is entered by pressing ";". Commands:
       ;compile         - Compile the YAML via ChatGPTClient.
       ;execute         - Compile then immediately run the generated code.
       ;run             - Execute the code section from last compile.
@@ -299,23 +300,27 @@ def run_editor(stdscr, api_key):
                         client = ChatGPTClient(api_key=api_key)
                         response = client.get_response(
                             prompt_text=yaml_prompt,
-                            model="gpt-3.5-turbo",
-                            max_tokens=4096,
                             system_prompt=SYSTEM_PROMPT
                         )
                         last_compile_response = response
-                        if "Status:" in response and "Code:" in response:
-                            status_part = response.split("Code:")[0].replace("Status:", "").strip()
+                        # Parse the response into its header and code parts.
+                        match = re.search(r"Status:\s*(.*?)\nDesc:\s*(.*?)\nNext:\s*(.*?)\nCode:\s*(.*)", response, re.DOTALL)
+                        if match:
+                            status_text = match.group(1).strip()
+                            desc_text = match.group(2).strip()
+                            next_text = match.group(3).strip()
+                            header_text = f"Status: {status_text}\nDesc: {desc_text}\nNext: {next_text}"
+                            code_section = match.group(4).strip()
                         else:
-                            status_part = response.strip()
+                            header_text = response.split("Code:")[0].strip() if "Code:" in response else response.strip()
+                            code_section = response.split("Code:")[1].strip() if "Code:" in response else ""
                         stdscr.clear()
                         stdscr.addstr(0, 0, "Compile Result:", curses.color_pair(1))
-                        stdscr.addstr(2, 0, status_part)
+                        stdscr.addstr(2, 0, header_text)
                         stdscr.addstr(height - 1, 0, "Press any key to execute the code.", curses.color_pair(2))
                         stdscr.refresh()
                         stdscr.getch()
-                        if "Code:" in response:
-                            code_section = response.split("Code:")[1].strip()
+                        if code_section:
                             run_code_section(stdscr, code_section)
                     except Exception as e:
                         stdscr.clear()
@@ -329,18 +334,23 @@ def run_editor(stdscr, api_key):
                         client = ChatGPTClient(api_key=api_key)
                         response = client.get_response(
                             prompt_text=yaml_prompt,
-                            model="gpt-3.5-turbo",
-                            max_tokens=4096,
                             system_prompt=SYSTEM_PROMPT
                         )
                         last_compile_response = response
-                        if "Status:" in response and "Code:" in response:
-                            status_part = response.split("Code:")[0].replace("Status:", "").strip()
+                        if "Code:" in response:
+                            match = re.search(r"Status:\s*(.*?)\nDesc:\s*(.*?)\nNext:\s*(.*?)\nCode:\s*(.*)", response, re.DOTALL)
+                            if match:
+                                status_text = match.group(1).strip()
+                                desc_text = match.group(2).strip()
+                                next_text = match.group(3).strip()
+                                header_text = f"Status: {status_text}\nDesc: {desc_text}\nNext: {next_text}"
+                            else:
+                                header_text = response.split("Code:")[0].strip()
                         else:
-                            status_part = response.strip()
+                            header_text = response.strip()
                         stdscr.clear()
                         stdscr.addstr(0, 0, "Compile Result:", curses.color_pair(1))
-                        stdscr.addstr(2, 0, status_part)
+                        stdscr.addstr(2, 0, header_text)
                         stdscr.addstr(height - 1, 0, "Press any key to return to the editor.", curses.color_pair(2))
                         stdscr.refresh()
                         stdscr.getch()
@@ -352,7 +362,11 @@ def run_editor(stdscr, api_key):
                         stdscr.getch()
                 elif cmd == "run":
                     if last_compile_response and "Code:" in last_compile_response:
-                        code_section = last_compile_response.split("Code:")[1].strip()
+                        match = re.search(r"Code:\s*(.*)", last_compile_response, re.DOTALL)
+                        if match:
+                            code_section = match.group(1).strip()
+                        else:
+                            code_section = ""
                         run_code_section(stdscr, code_section)
                     else:
                         cmd_win.erase()
@@ -361,11 +375,15 @@ def run_editor(stdscr, api_key):
                         stdscr.getch()
                 elif cmd == "savepy" and args:
                     if last_compile_response and "Code:" in last_compile_response:
-                        code_section = last_compile_response.split("Code:")[1].strip()
+                        match = re.search(r"Code:\s*(.*)", last_compile_response, re.DOTALL)
+                        if match:
+                            code_section = match.group(1).strip()
+                        else:
+                            code_section = ""
                         # Remove markdown code fences if present
                         code_section = code_section.replace("```python", "").replace("```", "")
-                        # Comment out any 'Status:' lines so they're not executed
-                        code_section = code_section.replace("Status:", "# Status:")
+                        # Remove any header lines (Status:, Desc:, Next:) from the code section.
+                        code_section = "\n".join(line for line in code_section.splitlines() if not re.match(r'^\s*(Status:|Desc:|Next:)', line))
                         filename = " ".join(args)
                         with open(filename, "w") as f:
                             f.write(code_section)

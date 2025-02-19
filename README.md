@@ -1,4 +1,4 @@
-# Terminal YAML Editor with Code Execution
+# YAML to Python
 
 Welcome to the **Terminal YAML Editor** project! This project is a full-featured, terminal-based text editor built with Python’s `curses` library. It enables you to write YAML instructions that are interpreted and compiled into runnable Python code using the ChatGPT API (via a custom `gptInterpreter` module). The generated Python code can then be executed directly from within the editor. This project combines text editing, syntax highlighting, file operations, API key management, and direct code execution—all within a terminal interface.
 
@@ -191,4 +191,3 @@ terminal-yaml-editor/
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-```

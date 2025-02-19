@@ -19,10 +19,7 @@ class ChatGPTClient:
         prompt_text: str,
         model: str = "gpt-3.5-turbo",
         max_tokens: int = 150,
-        system_prompt: str = """You are a programming language interpreter that outputs and yaml code given into python code that is then executed by the machine.
-                                If the yaml given is wrong syntax say that, act exactly like a compiler / interpreter and say so, and do not return any python code but an error in the format
-                                Status: (status - syntax is good, not good, and the error line)
-                                Code: (syntactically correct code here that i will parse (python) to be executed)"""
+        system_prompt: str = """Return a PROMPT NOT PROVIDED: PLEASE CHECK YOUR INPUT PARAMETERS"""
     ) -> str:
         """
         Sends a chat completion request to the ChatGPT API.
